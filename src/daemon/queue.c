@@ -89,7 +89,7 @@ int queue_push(queue_t *q, const char *line)
     snprintf(q->buf[q->tail].line, MAX_LINE + 1, "%s", line);
     q->tail = (q->tail + 1) % QUEUE_CAP;
     q->count++;
-    /*signals a thread to wake up*/
+    /*signals a worker to wake up*/
     pthread_cond_signal(&q->item_avail);
 
     /*release lock*/
@@ -108,24 +108,6 @@ int queue_push(queue_t *q, const char *line)
  * exiting" fall out of the worker's `while (queue_pop(...))` loop for
  * free, with no separate drain phase.
  *
- * TODO:
- *   1. lock q->lock
- *   2. while (count == 0 && !shutdown)
- *          pthread_cond_wait(&q->item_avail, &q->lock);
- *
- *   3. if (count == 0) { unlock; return 0; }
- *
- *      Test count, NOT shutdown. If you write `if (shutdown)` here, a
- *      worker will bail out while messages are still queued and you will
- *      lose lines on every SIGTERM - which is exactly what the Week 2
- *      "no lost lines" check catches.
- *
- *   4. *out = q->buf[q->head];
- *      Struct assignment copies the whole msg_t. This is why msg_t wraps
- *      the char array in a struct - C cannot assign raw arrays.
- *   5. head = (head + 1) % QUEUE_CAP;  count--
- *   6. pthread_cond_signal(&q->slot_avail)
- *   7. unlock; return 1
  * ------------------------------------------------------------------ */
 int queue_pop(queue_t *q, msg_t *out)
 {
@@ -135,7 +117,7 @@ int queue_pop(queue_t *q, msg_t *out)
         pthread_cond_wait(&q->item_avail, &q->lock);
     }
 
-    if(&q->count == 0){
+    if(q->count == 0){
         pthread_mutex_unlock(&q->lock);
         return 0;
     }
@@ -144,6 +126,7 @@ int queue_pop(queue_t *q, msg_t *out)
     q->head = (q->head + 1) % QUEUE_CAP;
     q->count--;
 
+    /*signlas dispatcher to wake up*/
     pthread_cond_signal(&q->slot_avail);
     pthread_mutex_unlock(&q->lock);
     return 1;
@@ -156,22 +139,17 @@ int queue_pop(queue_t *q, msg_t *out)
  *
  * Called from main.c once dispatcher_run() returns. Idempotent: calling
  * it twice must be harmless.
- *
- * TODO:
- *   1. lock q->lock
- *   2. q->shutdown = 1
- *   3. pthread_cond_broadcast(&q->item_avail)
- *      pthread_cond_broadcast(&q->slot_avail)
- *
- *      BROADCAST, not signal. Every blocked thread has to wake up and
- *      notice the flag. cond_signal wakes exactly one, so the other
- *      workers would sleep forever and pthread_join would never return.
- *
- *   4. unlock
+ 
  * ------------------------------------------------------------------ */
 void queue_shutdown(queue_t *q)
 {
-    (void)q;    /* TODO: remove once implemented */
+    pthread_mutex_lock(&q->lock);
+    q->shutdown = 1;
+    /*signal every worker to wake up*/
+    pthread_cond_broadcast(&q->item_avail);
+    pthread_cond_broadcast(&q->slot_avail);
+    
+    pthread_mutex_unlock(&q->lock);
 }
 
 
@@ -181,12 +159,12 @@ void queue_shutdown(queue_t *q)
  * Exists so control.c can report depth without reaching into q->count
  * directly - an unlocked read of that field is a data race, and Helgrind
  * will flag it in Week 3.
- *
- * TODO:
- *   1. lock, read count into a local, unlock, return the local
  * ------------------------------------------------------------------ */
 size_t queue_depth(queue_t *q)
 {
-    (void)q;    /* TODO: remove once implemented */
-    return 0;
+    size_t queue_count;
+    pthread_mutex_lock(&q->lock);
+    queue_count = q->count;
+    pthread_mutex_unlock(&q->lock);
+    return queue_count;
 }
