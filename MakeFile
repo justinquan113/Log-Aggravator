@@ -1,0 +1,17 @@
+CC = gcc
+CFLAGS = -Wall -Wextra -Wpedantic -g -O0 -std=gnu11 -pthread -I./include
+CLIENT = src/logctl/logctl.c
+SERVER = src/logctl/testcontrol.c
+
+all: logctl daemon
+
+logctl:
+	$(CC) $(CFLAGS) $(CLIENT) -o logctl
+
+daemon:
+	$(CC) $(CFLAGS) $(SERVER) -o daemon
+
+clean:
+	rm -f logctl daemon
+
+.PHONY: all clean logctl daemon
