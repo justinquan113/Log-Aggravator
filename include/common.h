@@ -283,4 +283,4 @@ void dispatcher_run(int fifo_fd);
 /* workers.c: pthread entry point. arg is &g_queue. */
 void *worker_main(void *arg);
 
-#endif /* COMMON_H */
+#endif

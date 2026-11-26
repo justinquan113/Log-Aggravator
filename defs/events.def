@@ -1,0 +1,6 @@
+LOGIN_FAIL         WARN        "user %s failed login"
+FILE_OPEN          INFO        "file %s opened"
+FILE_DELETE        WARN        "file %s deleted"
+PROCESS_START      INFO        "process %s started"
+PROCESS_CRASH      ERROR       "process %s crashed with code %d"
+DEBUG_MESSAGE      DEBUG       "debug information: %s"

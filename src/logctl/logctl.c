@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include "common.h"
 
+/*Need to learn how to handle connections errors*/
+
 int get_command(char *command, size_t buffer_size) {
 
     char prompt[] = "logctl> ";
